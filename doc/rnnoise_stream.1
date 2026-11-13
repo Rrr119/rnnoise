@@ -1,0 +1,102 @@
+.TH RNNOISE_STREAM 1 "November 2026" "rnnoise" "User Commands"
+.SH NAME
+rnnoise_stream \- streaming RNNoise denoiser with VAD timestamps
+.SH SYNOPSIS
+.B rnnoise_stream
+[\fIOPTIONS\fR] \fIINPUT\fR \fIOUTPUT\fR
+.SH DESCRIPTION
+.B rnnoise_stream
+reads mono or multichannel WAV or raw PCM, denoises it with RNNoise in
+10 ms (480 sample) frames, and writes denoised audio while streaming.
+The reader, inference worker and writer run in separate threads connected
+by bounded queues, so memory use does not grow with the input length.
+.PP
+Samples are downmixed to mono before denoising.  The denoised mono signal is
+written to all channels of the output.  Audio not sampled at 48 kHz is
+resampled to 48 kHz for inference and back to the original rate for output.
+The output always uses the input sample rate and channel count.
+.PP
+VAD probabilities are written as CSV with one row per 10 ms inference frame.
+The first output audio frame and the first VAD row both start at time zero.
+The worker compensates for RNNoise's one-frame synthesis delay before writing.
+.PP
+Use
+.B \-
+for stdin or stdout.  A WAV header written to a non-seekable pipe uses
+0xffffffff for the RIFF and data sizes; a regular output file is patched with
+the final sizes.
+.SH OPTIONS
+.TP
+.BI "\-f, \-\-input-format " "auto | wav | raw"
+Select input format.  The default is
+.BR auto ,
+which recognizes RIFF/WAVE and treats everything else as raw PCM.
+.TP
+.BI "\-F, \-\-output-format " "auto | wav | raw"
+Select output format.  With
+.BR auto ,
+stdin/stdout inherits the input format and a path ending in
+.B .wav
+is WAV; other paths are raw.
+.TP
+.BI "\-r, \-\-sample-rate " HZ
+Raw input sample rate.  Default: 48000.
+.TP
+.BI "\-c, \-\-channels " N
+Raw input channel count.  Default: 1.
+.TP
+.BI "\-\-sample-format " FORMAT
+Raw input sample format.  Default: s16le.  Valid values are u8, s16le, s16be,
+s24le, s24be, s32le, s32be, f32le and f32be.
+.TP
+.BI "\-\-output-sample-format " FORMAT
+Raw output sample format.  Default: the input sample format.
+.TP
+.BI "\-\-vad " FILE
+Write the VAD CSV to FILE, or to stdout when FILE is
+.BR \- .
+The default is OUTPUT.vad.csv, or INPUT.vad.csv when the audio is written to
+stdout.  When both audio streams are stdin/stdout this option is required.
+.TP
+.BI "\-\-model " FILE
+Load a custom RNNoise model.
+.TP
+.BI "\-q, \-\-queue-frames " N
+Maximum number of frames in each bounded thread queue.  Default: 32.
+.TP
+.B \-\-quiet
+Do not print the startup summary to stderr.
+.TP
+.B \-h, \-\-help
+Show usage information.
+.SH OUTPUT
+The VAD file starts with:
+.PP
+.nf
+time_seconds,vad_probability
+0.000000,0.000123456
+0.010000,0.000234567
+.fi
+.PP
+Each row corresponds to the audio frame beginning at that timestamp.  Rows are
+emitted in order even though reading, inference and writing are concurrent.
+.SH EXAMPLES
+Denoise a WAV file and keep a separate VAD CSV:
+.PP
+.nf
+rnnoise_stream input.wav output.wav --vad output.vad.csv
+.fi
+.PP
+Process raw 44.1 kHz stereo PCM from a pipe:
+.PP
+.nf
+cat input.pcm | rnnoise_stream - - \\
+  --sample-format s16le --sample-rate 44100 --channels 2 \\
+  --output-format raw --output-sample-format s16le --vad vad.csv > out.pcm
+.fi
+.SH EXIT STATUS
+Zero on success.  A nonzero status is returned for invalid arguments,
+unsupported PCM formats, truncated samples, I/O errors, or if the writer cannot
+produce exactly the original number of audio frames.
+.SH SEE ALSO
+.BR rnnoise_demo (1)

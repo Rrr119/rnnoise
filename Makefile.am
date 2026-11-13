@@ -59,6 +59,14 @@ if OP_ENABLE_EXAMPLES
 noinst_PROGRAMS += examples/rnnoise_demo
 endif
 
+bin_PROGRAMS = rnnoise_stream
+rnnoise_stream_SOURCES = examples/rnnoise_stream.c
+rnnoise_stream_CFLAGS = $(AM_CFLAGS) -pthread
+rnnoise_stream_LDADD = librnnoise.la $(LIBM)
+rnnoise_stream_LDFLAGS = -pthread
+
+dist_man_MANS = doc/rnnoise_stream.1
+
 examples_rnnoise_demo_SOURCES = examples/rnnoise_demo.c
 examples_rnnoise_demo_LDADD = librnnoise.la
 
@@ -80,7 +88,11 @@ EXTRA_DIST = \
  rnnoise.pc.in \
  rnnoise-uninstalled.pc.in \
  doc/Doxyfile.in \
- doc/Makefile
+ doc/Makefile \
+ tests/stream_test.py
+
+TESTS = tests/stream_test.py
+AM_TESTS_ENVIRONMENT = RNNOISE_STREAM='$(abs_top_builddir)/rnnoise_stream'; export RNNOISE_STREAM;
 
 # Targets to build and install just the library without the docs
 librnnoise install-librnnoise: NO_DOXYGEN = 1

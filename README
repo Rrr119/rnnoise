@@ -31,6 +31,57 @@ PCM files sampled at 48 kHz. It can be used as:
 The output is also a 16-bit raw PCM file.
 NOTE AGAIN, THE INPUT and OUTPUT ARE IN RAW FORMAT, NOT WAV.
 
+== Streaming command-line tool ==
+
+`rnnoise_stream` is a streaming alternative to `examples/rnnoise_demo`. It
+accepts WAV or raw PCM, processes 10 ms frames as they arrive, and writes the
+denoised audio plus a CSV containing each frame's VAD probability. Reading,
+inference, and writing run in three threads connected by bounded queues. Frame
+order is preserved and memory use stays constant regardless of input length.
+
+Build it with the normal project build:
+
+% ./autogen.sh
+% ./configure
+% make
+
+Then denoise a WAV file:
+
+% ./rnnoise_stream noisy.wav clean.wav --vad clean.vad.csv
+
+The CSV contains:
+
+time_seconds,vad_probability
+0.000000,0.000123456
+0.010000,0.000234567
+
+Timestamps advance by 10 ms. The inference worker compensates for RNNoise's
+one-frame synthesis delay, so the first CSV row and the first output frame both
+start at zero.
+
+Audio at a rate other than 48 kHz is resampled for inference and converted back
+to the original rate on output. Multichannel audio is downmixed for inference
+and the denoised mono signal is written to every output channel. The output
+keeps the input sample rate and channel count.
+
+Use `-` for stdin or stdout, and select raw parameters explicitly:
+
+% cat mic.pcm | ./rnnoise_stream - - \
+    --input-format raw --output-format raw --sample-format s16le \
+    --sample-rate 44100 --channels 2 --vad mic.vad.csv > clean.pcm
+
+When `--vad` is omitted, the default is `OUTPUT.vad.csv` for a file output, or
+`INPUT.vad.csv` when audio goes to stdout. It is required when both audio
+streams are stdin/stdout. `--queue-frames` controls the bounded queue depth
+(default 32); `--model FILE` selects a loadable model.
+
+Run the end-to-end tests with:
+
+% make check
+
+See `doc/rnnoise_stream.1` or `man rnnoise_stream` after installation for the
+complete option list.
+
 The latest version of the source is available from
 https://gitlab.xiph.org/xiph/rnnoise .  The GitHub repository
 is a convenience copy.
